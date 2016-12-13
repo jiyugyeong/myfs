@@ -1265,3 +1265,527 @@ void myshowfile(char *order,file_system *mf){
     n2b=num2/128;
   n1r=num1%128;
   if(n1r==0&&num1!=0)
+	     n1r=128;
+  n2r=num2%128;
+  if(n2r==0&&num2!=0)
+      n2r=128;
+  if(n1b==n2b){
+    for(int i=n1r-1;i<n2r;i++)
+    printf("%c",mf->data[data_list[n1b]].reg.storage[i]);
+    return ;
+  }
+  for(int i=n1r-1;i<128;i++){
+    printf("%c",mf->data[data_list[n1b]].reg.storage[i]);
+  }
+  for(int i=n1b+1;i<=n2b-1;i++){
+    for(int j=0;j<128;j++)
+      printf("%c",mf->data[data_list[i]].reg.storage[j]);
+  }
+  for(int i=0;i<n2r;i++){
+    printf("%c",mf->data[data_list[n2b]].reg.storage[i]);
+  }
+}
+void mystate(char *order,file_system *mf){
+  int data_count;
+  data_count=count_empty_block(mf->sup_inode,64);
+  printf("free inode : %d\n",data_count);
+  data_count=count_empty_block(mf->sup_data,128);
+  printf("free data block : %d\n",data_count);
+}
+void mycpfrom(char *order,file_system *mf){
+  char myf_name[5]="";
+	char f_name[1000];
+  int file_size,i_empty,*db_empty,size_c,data_count,work_station=now;
+	FILE *fop;
+	time_t ct;
+	ct=time(NULL);
+  sscanf(order,"%*s %s %c %c %c %c ",f_name,&myf_name[0],&myf_name[1],&myf_name[2],&myf_name[3]);
+  fop=fopen(f_name,"rb");
+  if(fop==NULL){
+    printf("오류 : 파일이 없습니다.\n");
+    return ;
+  }
+  {
+    int *data_list,rn,temp;
+    data_list=list_data_block(work_station,mf);
+    rn=count_data_block(work_station,mf);
+    for(int i=0;i<rn;i++){
+      temp=find_file(mf->data[data_list[i]].dir,myf_name);
+      if(temp!=-1) {
+        printf("오류 : 파일이 이미 있습니다.\n");
+        return ;
+      }
+    }
+    free(data_list);
+  }
+  fseek(fop,0,SEEK_END);
+	file_size=ftell(fop);
+	fseek(fop,0,SEEK_SET);
+  size_c=cal_block(file_size);
+  data_count=count_empty_block(mf->sup_data,128);
+
+  if(size_c<=data_count){
+		i_empty=find_empty_block(mf->sup_inode,64);
+		mark_super(mf->sup_inode,i_empty);
+
+		mf->inode[i_empty].type='-';
+		mf->inode[i_empty].c_time=*(localtime(&ct));
+		mf->inode[i_empty].size=file_size;
+		db_empty=list_empty_db(mf->sup_data,size_c);
+		write_fname_finode(mf,myf_name,i_empty,work_station);
+
+		if(size_c==1){
+			mf->inode[i_empty].direct_block=db_empty[0];
+			mf->inode[i_empty].indirect_block=-1;
+			mf->inode[i_empty].double_indirect_block=-1;
+			fread(mf->data[db_empty[0]].reg.storage,file_size,1,fop);
+		}
+		else if(size_c>=3&&size_c<=104){
+			mf->inode[i_empty].direct_block=db_empty[0];
+			mf->inode[i_empty].indirect_block=db_empty[size_c-1];
+			mf->inode[i_empty].double_indirect_block=-1;
+      for(int i=1;i<size_c-1;i++)
+        indirect_int_to_bit(mf->data[db_empty[size_c-1]].reg.storage,db_empty[i]);
+      for(int i=0;i<size_c-2;i++)
+        fread(mf->data[db_empty[i]].reg.storage,128,1,fop);
+      {
+        int temp;
+        temp=file_size%128;
+        if(file_size/128!=0&&temp==0)
+          temp=128;
+        fread(mf->data[db_empty[size_c-2]].reg.storage,temp,1,fop);
+      }
+    }
+	}
+	else
+		printf("오류 : 공간 부족\n");
+  free(db_empty);
+  fclose(fop);
+}
+int find_empty_block(unsigned char *check,int length){
+	unsigned char bit_ch,bit_temp;
+	for(int i=0;i<length;i++){
+		for(int j=0;j<8;j++){
+			bit_ch=pow(2,7-j);
+			bit_temp=check[i]&bit_ch;
+			if(bit_temp==0){
+				return (i*8+j);
+			}
+		}
+	}
+	return -1;
+}
+tree * create_tree(char *file_name,int file_inode){
+  tree *temp;
+  temp=(tree *)calloc(1,sizeof(tree));
+  strncpy(temp->file_name,file_name,4);
+  temp->file_inode=file_inode;
+  temp->parents=NULL;
+  temp->siblings=NULL;
+  temp->children=NULL;
+  return temp;
+}
+void mark_super(unsigned char *check,int num){
+	int room,square,bit;
+	room=num/8;
+	square=num%8;
+	bit=pow(2,7-square);
+	check[room]=check[room]|bit;
+}
+void unmark_super(unsigned char *check,int num){
+	int room,square,bit;
+	room=num/8;
+	square=num%8;
+	bit=pow(2,7-square);
+	bit=255-bit;
+	check[room]=check[room]&bit;
+}
+void mycpto(char *order,file_system *mf){
+  char myf_name[5]="",cpf_name[1000]="";
+  int fin,rn,*data_list,size;
+  FILE *fop;
+  sscanf(order,"%*s %4s",myf_name);
+  sscanf(order,"%*s %*s %s",cpf_name);
+  data_list=list_data_block(now,mf);
+  rn=count_data_block(now,mf);
+  for(int i=0;i<rn;i++){
+    fin=find_file(mf->data[data_list[i]].dir,myf_name);
+    if(fin!=-1) break;
+  }
+  if(fin==-1){
+    printf("오류 : 파일이 없습니다.\n");
+    return ;
+  }
+  free(data_list);
+  data_list=list_data_block(fin,mf);
+  rn=count_data_block(fin,mf);
+  size=mf->inode[fin].size;
+  fop=fopen(cpf_name,"wb");
+  for(int i=0;i<rn;i++){
+    if(i==rn-1){
+      fwrite(mf->data[data_list[i]].reg.storage,size,1,fop);
+    }
+    else{
+      size=size-128;
+      fwrite(mf->data[data_list[i]].reg.storage,128,1,fop);
+    }
+  }
+  fclose(fop);
+}
+void myls(char *order,file_system *mf){
+	char option[1000]="",course[1000]="",ct_s[20];
+	short dfn,work_station;
+  int data_list;
+  ram_dfile *srt;
+	sscanf(order,"%*s %s %s",option,course);
+  if(option[0]=='-'){
+    if(course[0]==0)
+      work_station=now;
+    else
+      work_station=find_route(course,mf);
+  }
+  else if(option[0]==0){
+    work_station=now;
+  }
+  else
+    work_station=find_route(option,mf);
+  if(mf->inode[work_station].type=='-'){
+    printf("오류 : directory 파일 입니다.\n");
+    return ;
+  }
+  dfn=mf->data[mf->inode[work_station].direct_block].dir.famount;
+  srt=(ram_dfile *)calloc(dfn,sizeof(ram_dfile));
+  if(dfn<=20){
+    for(int i=0;i<dfn;i++){
+       strncpy(srt[i].file_name,mf->data[mf->inode[work_station].direct_block].dir.name_inode[i].file_name,4);
+       srt[i].file_name[4]=0;
+       srt[i].file_inode=mf->data[mf->inode[work_station].direct_block].dir.name_inode[i].file_inode;
+    }
+  }
+  else if(dfn>20){
+    for(int i=0;i<20;i++){
+      strncpy(srt[i].file_name,mf->data[mf->inode[work_station].direct_block].dir.name_inode[i].file_name,4);
+      srt[i].file_name[4]=0;
+      srt[i].file_inode=mf->data[mf->inode[work_station].direct_block].dir.name_inode[i].file_inode;
+    }
+    for(int i=0;i<dfn/20-1;i++){
+      data_list=indirect_bit_to_int(mf->data[mf->inode[work_station].indirect_block].reg.storage,i+1);
+      for(int j=0;j<20;j++){
+        strncpy(srt[(i+1)*20+j].file_name,mf->data[mf->inode[data_list].direct_block].dir.name_inode[j].file_name,4);
+        srt[(i+1)*20+j].file_name[4]=0;
+        srt[(i+1)*20+j].file_inode=mf->data[mf->inode[data_list].direct_block].dir.name_inode[j].file_inode;
+      }
+    }
+    data_list=indirect_bit_to_int(mf->data[mf->inode[work_station].indirect_block].reg.storage,dfn/20);
+    {
+      int temp;
+      temp=dfn%20;
+      if(dfn/20!=0&&temp==0)
+        temp=20;
+      for(int i=0;i<temp;i++){
+        strncpy(srt[(dfn/20)*20+i].file_name,mf->data[data_list].dir.name_inode[i].file_name,4);
+        srt[(dfn/20)*20+i].file_name[4]=0;
+        srt[(dfn/20)*20+i].file_inode=mf->data[data_list].dir.name_inode[i].file_inode;
+      }
+    }
+  }
+  qsort(srt,dfn,sizeof(ram_dfile),sort_str);
+  if(option[0]==0){
+    printf(".\n..\n");
+    for(int i=0;i<dfn;i++)
+      printf("%s\n",srt[i].file_name);
+  }
+  else if(option[0]=='-'&&option[1]=='l'&&option[2]==0){
+    int fin;
+    fin=mf->data[mf->inode[work_station].direct_block].dir.present;
+    time_to_string(mf->inode[fin].c_time,ct_s);
+    printf("d %6d %s .\n",0,ct_s);
+    fin=mf->data[mf->inode[work_station].direct_block].dir.parent;
+    time_to_string(mf->inode[fin].c_time,ct_s);
+    printf("d %6d %s ..\n",0,ct_s);
+    for(int i=0;i<dfn;i++){
+      fin=srt[i].file_inode;
+      time_to_string(mf->inode[fin].c_time,ct_s);
+      printf("%c %6d %s %s\n",mf->inode[fin].type,mf->inode[fin].size,ct_s,srt[i].file_name);
+    }
+  }
+  else if(option[0]=='-'&&option[1]=='i'&&option[2]==0){
+    int fin;
+    fin=mf->data[mf->inode[work_station].direct_block].dir.present;
+    printf("%3d .\n",fin+1);
+    fin=mf->data[mf->inode[work_station].direct_block].dir.parent;
+    printf("%3d ..\n",fin+1);
+    for(int i=0;i<dfn;i++){
+      fin=srt[i].file_inode;
+      printf("%3d %s\n",fin+1,srt[i].file_name);
+    }
+  }
+  else if((option[0]=='-'&&option[1]=='l'&&option[2]=='i')||(option[0]=='-'&&option[1]=='i'&&option[2]=='l')){
+    int fin;
+    fin=mf->data[mf->inode[work_station].direct_block].dir.present;
+    time_to_string(mf->inode[fin].c_time,ct_s);
+    printf("%3d d %6d %s .\n",fin+1,0,ct_s);
+    fin=mf->data[mf->inode[work_station].direct_block].dir.parent;
+    time_to_string(mf->inode[fin].c_time,ct_s);
+    printf("%3d d %6d %s ..\n",fin+1,0,ct_s);
+    for(int i=0;i<dfn;i++){
+      fin=srt[i].file_inode;
+      time_to_string(mf->inode[fin].c_time,ct_s);
+      printf("%3d %c %6d %s %s\n",fin+1,mf->inode[fin].type,mf->inode[fin].size,ct_s,srt[i].file_name);
+    }
+  }
+  else {
+    printf(".\n..\n");
+    for(int i=0;i<dfn;i++)
+      printf("%s\n",srt[i].file_name);
+  }
+  free(srt);
+}
+void recursion_tree(file_system *mf,tree *work_station){
+  int famount,*data_list;
+  tree *temp;
+  if(mf->inode[work_station->file_inode].type=='-')
+    return;
+  famount=mf->data[mf->inode[work_station->file_inode].direct_block].dir.famount;
+  if(famount==0)
+    return;
+  data_list=list_data_block(work_station->file_inode,mf);
+  work_station->children=create_tree(mf->data[data_list[0]].dir.name_inode[0].file_name,mf->data[data_list[0]].dir.name_inode[0].file_inode);
+  work_station->children->parents=work_station;
+  temp=work_station;
+  work_station=work_station->children;
+  recursion_tree(mf,work_station);
+  for(int i=1;i<famount;i++){
+    work_station->siblings=create_tree(mf->data[data_list[i/20]].dir.name_inode[i%20].file_name,mf->data[data_list[i/20]].dir.name_inode[i%20].file_inode);
+    work_station->siblings->parents=temp;
+    work_station=work_station->siblings;
+    recursion_tree(mf,work_station);
+  }
+  free(data_list);
+}
+int find_file(directory storage,char *name){
+  int fin=-1,temp;
+  for(int i=0;i<20;i++){
+    temp=strncmp(storage.name_inode[i].file_name,name,4);
+    if(temp==0){
+      fin=storage.name_inode[i].file_inode;
+      break;
+    }
+  }
+  return fin;
+}
+void remove_fname_finode(file_system *mf,char *myf_name,int work_station){
+  int *data_list,rn,temp,fin,temp2,last=19,last_rn;
+  data_list=list_data_block(work_station,mf);
+  rn=count_data_block(work_station,mf);
+  for(int i=0;i<rn;i++){
+    fin=find_file(mf->data[data_list[i]].dir,myf_name);
+    if(fin!=-1) {temp=i; break;}
+  }
+  if(fin==-1){
+    printf("오류 : 파일이 없습니다.\n");
+    free(data_list);
+    return ;
+  }
+  mf->data[data_list[0]].dir.famount-=1;
+  for(int i=0;i<20;i++){
+    if(mf->data[data_list[rn-1]].dir.name_inode[i].file_inode==0){
+        last=i-1;
+        last_rn=rn-1;
+        break;
+    }
+  }
+  if(last==-1){
+    last=19;
+    last_rn=rn-2;
+    remove_indirect_bit(mf->data[mf->inode[work_station].indirect_block].reg.storage,1,mf);
+    if(mf->data[data_list[0]].dir.famount<20){
+      unmark_super(mf->sup_data,mf->inode[work_station].indirect_block);
+      reset_data_block(mf->inode[work_station].indirect_block,mf);
+      mf->inode[work_station].indirect_block=-1;
+    }
+  }
+  for(int i=0;i<20;i++){
+    if(strncmp(mf->data[data_list[temp]].dir.name_inode[i].file_name,myf_name,4)==0){
+        temp2=i;
+        break;
+    }
+  }
+  mf->data[data_list[temp]].dir.name_inode[temp2].file_name[0]=mf->data[data_list[last_rn]].dir.name_inode[last].file_name[0];
+  mf->data[data_list[temp]].dir.name_inode[temp2].file_name[1]=mf->data[data_list[last_rn]].dir.name_inode[last].file_name[1];
+  mf->data[data_list[temp]].dir.name_inode[temp2].file_name[2]=mf->data[data_list[last_rn]].dir.name_inode[last].file_name[2];
+  mf->data[data_list[temp]].dir.name_inode[temp2].file_name[3]=mf->data[data_list[last_rn]].dir.name_inode[last].file_name[3];
+  mf->data[data_list[temp]].dir.name_inode[temp2].file_inode=mf->data[data_list[last_rn]].dir.name_inode[last].file_inode;
+  mf->data[data_list[last_rn]].dir.name_inode[last].file_name[0]=0;
+  mf->data[data_list[last_rn]].dir.name_inode[last].file_name[1]=0;
+  mf->data[data_list[last_rn]].dir.name_inode[last].file_name[2]=0;
+  mf->data[data_list[last_rn]].dir.name_inode[last].file_name[3]=0;
+  mf->data[data_list[last_rn]].dir.name_inode[last].file_inode=0;
+  free(data_list);
+}
+void change_fname_finode(file_system *mf,char *myf_name,char *change_name,int work_station){
+  int *data_list,rn,temp,fin,temp2;
+  data_list=list_data_block(work_station,mf);
+  rn=count_data_block(work_station,mf);
+  for(int i=0;i<rn;i++){
+    fin=find_file(mf->data[data_list[i]].dir,myf_name);
+    if(fin!=-1) {temp=i; break;}
+  }
+  if(fin==-1){
+    printf("오류 : 파일이 없습니다.\n");
+    free(data_list);
+    return ;
+  }
+  for(int i=0;i<20;i++){
+    if(strncmp(mf->data[data_list[temp]].dir.name_inode[i].file_name,myf_name,4)==0){
+        temp2=i;
+        break;
+    }
+  }
+  mf->data[data_list[temp]].dir.name_inode[temp2].file_name[0]=change_name[0];
+  mf->data[data_list[temp]].dir.name_inode[temp2].file_name[1]=change_name[1];
+  mf->data[data_list[temp]].dir.name_inode[temp2].file_name[2]=change_name[2];
+  mf->data[data_list[temp]].dir.name_inode[temp2].file_name[3]=change_name[3];
+  free(data_list);
+}
+int cal_indirect_num(unsigned char *storage){
+  int temp,count=0;
+  for(int i=1;i<=102;i++){
+    temp=indirect_bit_to_int(storage,i);
+    if(temp==0){
+      count=i-1;
+      break;
+    }
+  }
+  return count;
+}
+void print_tree(char *order,tree *root,tree *now,file_system *mf){
+  char course[1000]="",bck[1000],(*nlist)[5],*temp;
+  int i=1,deep=0;
+  tree *work_station=NULL;
+  sscanf(order,"%*s %s",course);
+  strcpy(bck,course);
+  if(course[0]==0){
+    printf("%s\n",now->file_name);
+    if(mf->data[mf->inode[now->file_inode].direct_block].dir.famount==0)
+      return ;
+    deep=1;
+    work_station=now->children;
+    recursion_print(deep,work_station);
+  }
+  else if(course[0]=='/'){
+    if(find_route(course,mf)==-1){
+      printf("오류 : 파일이 없습니다.\n");
+      return ;
+    }
+    if(mf->inode[find_route(course,mf)].type=='-'){
+      printf("오류 : regular 파일 입니다.\n");
+      return ;
+    }
+    int count=1;
+     while(1)
+       {
+          if(course[2]==0)
+          {
+             count--;
+             break;
+          }
+          if(course[i]=='/' && course[i+1]!=0)
+             count++;
+          else if(course[i]=='/'&&course[i+1]==0)
+             break;
+          if(course[i] == 0)
+             break;
+          i++;
+       }
+       nlist=(char (*)[5])calloc((count+1)*5,sizeof(char));
+       nlist[0][0]='/';
+       nlist[0][1]=0;
+       nlist[0][2]=0;
+       nlist[0][3]=0;
+       if(count>=1){
+         temp=strtok(bck,"/");
+         nlist[1][0]=temp[0];
+         nlist[1][1]=temp[1];
+         nlist[1][2]=temp[2];
+         nlist[1][3]=temp[3];
+        for(int i=2;i<=count;i++){
+          temp=strtok(NULL,"/");
+          nlist[i][0]=temp[0];
+          nlist[i][1]=temp[1];
+          nlist[i][2]=temp[2];
+          nlist[i][3]=temp[3];
+        }
+      }
+      work_station=change_work_station(nlist,count+1,root,work_station);
+      printf("%s\n",work_station->file_name);
+      if(work_station->children==NULL)
+        return ;
+      deep=1;
+      work_station=work_station->children;
+      recursion_print(deep,work_station);
+
+  }
+  else{
+    if(find_route(course,mf)==-1){
+      printf("오류 : 파일이 없습니다.\n");
+      return ;
+    }
+    if(mf->inode[find_route(course,mf)].type=='-'){
+      printf("오류 : regular 파일 입니다.\n");
+      return ;
+    }
+    int count=0;
+    if(course[strlen(course)-1]=='/')
+     course[strlen(course)-1]=0;
+    for(int i=0;i<=(int)strlen(course);i++){
+      if(course[i]=='/'||course[i]==0){
+        count++;
+      }
+    }
+    nlist=(char (*)[5])calloc(count*5,sizeof(char));
+      temp=strtok(bck,"/");
+      nlist[0][0]=temp[0];
+      nlist[0][1]=temp[1];
+      nlist[0][2]=temp[2];
+      nlist[0][3]=temp[3];
+     for(int i=1;i<count;i++){
+       temp=strtok(NULL,"/");
+       nlist[i][0]=temp[0];
+       nlist[i][1]=temp[1];
+       nlist[i][2]=temp[2];
+       nlist[i][3]=temp[3];
+     }
+     work_station=change_work_station(nlist,count,root,now);
+     printf("%s\n",work_station->file_name);
+     if(work_station->children==NULL)
+       return ;
+     deep=1;
+     work_station=work_station->children;
+     recursion_print(deep,work_station);
+  }
+}
+int indirect_bit_to_int(unsigned char *storage,int num){
+  int ind,bit_s,con=0,stack[10],temp;
+  ind=num+(num-1)/4;
+  bit_s=((num-1)*10)%8;
+  for(int i=0;i<8-bit_s;i++){
+    temp=pow(2,7-bit_s-i);
+    temp=storage[ind-1]&temp;
+    if(temp!=0)
+      stack[i]=1;
+    else
+      stack[i]=0;
+  }
+  for(int i=8-bit_s;i<10;i++){
+    temp=pow(2,7-i+(8-bit_s));
+    temp=storage[ind]&temp;
+    if(temp!=0)
+      stack[i]=1;
+    else
+      stack[i]=0;
+  }
+  for(int i=0;i<10;i++)
+    con+=stack[i]*pow(2,9-i);
+  return con;
+}
