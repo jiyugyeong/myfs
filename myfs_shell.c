@@ -806,5 +806,462 @@ int temp,data_list,fc,fdc,present=0,parent=0;
   data_list=mf->inode[file_inode].direct_block;
   fc=mf->data[data_list].dir.famount++;
   present=mf->data[data_list].dir.present;
+	 fdc=fc/20;
+  if(fdc==0){
+    strncpy(mf->data[data_list].dir.name_inode[fc].file_name,myf_name,4);
+    mf->data[data_list].dir.name_inode[fc].file_inode=i_empty;
+    if(fc==19){
+      mf->inode[file_inode].indirect_block=find_empty_block(mf->sup_data,128);
+      mark_super(mf->sup_data,mf->inode[file_inode].indirect_block);
+      temp=mf->inode[file_inode].indirect_block;
+      indirect_int_to_bit(mf->data[temp].reg.storage,find_empty_block(mf->sup_data,128));
+      temp=find_empty_block(mf->sup_data,128);
+      mark_super(mf->sup_data,temp);
+      mf->data[temp].dir.present=present;
+      mf->data[temp].dir.parent=parent;
+    }
+  }
+  else if(fdc>=1&&fdc<=102){
+    data_list=mf->inode[file_inode].indirect_block;
+    data_list=indirect_bit_to_int(mf->data[data_list].reg.storage,fdc);
+    strncpy(mf->data[data_list].dir.name_inode[fc%20].file_name,myf_name,4);
+    mf->data[data_list].dir.name_inode[fc%20].file_inode=i_empty;
+    if(fc%20==19&&fdc!=102){
+      temp=mf->inode[file_inode].indirect_block;
+      indirect_int_to_bit(mf->data[temp].reg.storage,find_empty_block(mf->sup_data,128));
+      temp=find_empty_block(mf->sup_data,128);
+      mark_super(mf->sup_data,temp);
+      mf->data[temp].dir.present=present;
+      mf->data[temp].dir.parent=parent;
+    }
+  }
+}
+void mypwd(char *order,file_system *mf){
+  printf("%s\n",now_directory);
+}
+void mycd(char *order,file_system *mf,tree *root,tree **n2ow){
+  char course[1000]="",(*nlist)[5],*temp,stack[1000][5]={""};
+  int fin,i=1;
+  tree *ws;
+  sscanf(order,"%*s %s",course);
+  if(course[strlen(course)-1]=='/')
+    course[strlen(course)-1]=0;
+  if(course[0]==0){
+    now=0;
+    for(int i=1;i<10000;i++)
+      now_directory[i]=0;
+    now_directory[0]='/';
+    *n2ow=root;
+  }
+  else{
+    fin=find_route(course,mf);
+    if(fin==-1){
+      printf("오류 : 파일이 없습니다.\n");
+      return ;
+    }
+    if(mf->inode[fin].type=='-'){
+      printf("오류 : regular 파일 입니다.\n");
+      return ;
+    }
+    if (course[0]=='/') {
+      for(int j=1;j<10000;j++)
+        now_directory[j]=0;
+        int count=1;
+         while(1)
+           {
+              if(course[2]==0)
+              {
+                 count--;
+                 break;
+              }
+              if(course[i]=='/' && course[i+1]!=0)
+                 count++;
+              else if(course[i]=='/'&&course[i+1]==0)
+                 break;
+              if(course[i] == 0)
+                 break;
+              i++;
+           }
+           nlist=(char (*)[5])calloc((count+1)*5,sizeof(char));
+           nlist[0][0]='/';
+           nlist[0][1]=0;
+           nlist[0][2]=0;
+           nlist[0][3]=0;
+           if(count>=1){
+             temp=strtok(course,"/");
+             nlist[1][0]=temp[0];
+             nlist[1][1]=temp[1];
+             nlist[1][2]=temp[2];
+             nlist[1][3]=temp[3];
+            for(int i=2;i<=count;i++){
+              temp=strtok(NULL,"/");
+              nlist[i][0]=temp[0];
+              nlist[i][1]=temp[1];
+              nlist[i][2]=temp[2];
+              nlist[i][3]=temp[3];
+            }
+          }
+          ws=change_work_station(nlist,count+1,root,*n2ow);
+          *n2ow=ws;
+        i=0;
+        while(1){
+            strcpy(stack[i],ws->file_name);
+            if(strncmp(stack[i],"/",1)==0)
+              break;
+            i++;
+            ws=ws->parents;
+        }
+        for(int j=i-1;j>=0;j--){
+          if(j==i-1)
+            sprintf(now_directory,"/%s",stack[j]);
+          else
+            sprintf(now_directory+strlen(stack[j])+1,"/%s",stack[j]);
+        }
+    }
+    else{
+      for(int j=1;j<10000;j++)
+        now_directory[j]=0;
+        int count=0;
+        if(course[strlen(course)-1]=='/')
+         course[strlen(course)-1]=0;
+        for(int k=0;k<=(int)strlen(course);k++){
+          if(course[k]=='/'||course[k]==0){
+            count++;
+          }
+        }
+        nlist=(char (*)[5])calloc(count*5,sizeof(char));
+          temp=strtok(course,"/");
+          nlist[0][0]=temp[0];
+          nlist[0][1]=temp[1];
+          nlist[0][2]=temp[2];
+          nlist[0][3]=temp[3];
+         for(int k=1;k<count;k++){
+           temp=strtok(NULL,"/");
+           nlist[k][0]=temp[0];
+           nlist[k][1]=temp[1];
+           nlist[k][2]=temp[2];
+           nlist[k][3]=temp[3];
+         }
+         ws=change_work_station(nlist,count,root,*n2ow);
+        *n2ow=ws;
+         i=0;
+         while(1){
+             strcpy(stack[i],ws->file_name);
+             if(strncmp(stack[i],"/",1)==0)
+               break;
+             i++;
+             ws=ws->parents;
+         }
+         for(int j=i-1;j>=0;j--){
+           if(j==i-1)
+             sprintf(now_directory,"/%s",stack[j]);
+           else
+             sprintf(now_directory+strlen(stack[j])+1,"/%s",stack[j]);
+         }
+    }
+    now=fin;
+  }
 
-
+}
+void indirect_int_to_bit(unsigned char *storage,short num){
+  int temp,emp=103,bit_s;
+  unsigned char first,second;
+  for(int i=1;i<=102;i++){
+    temp=indirect_bit_to_int(storage,i);
+    if(temp==0){
+      emp=i;
+      break;
+    }
+  }
+  emp=emp-1;
+  bit_s=(emp*10)%8;
+  temp=0;
+  for(int i=0;i<8-bit_s;i++)
+    temp+=pow(2,9-i);
+  temp=num&temp;
+  first=temp>>(2+bit_s);
+  temp=0;
+  for(int i=0;i<2+bit_s;i++)
+    temp+=pow(2,1+bit_s-i);
+  temp=num&temp;
+  second=temp<<(6-bit_s);
+  storage[emp]=storage[emp]|first;
+  storage[emp+1]=storage[emp+1]|second;
+}
+void remove_indirect_bit(unsigned char *storage,short count,file_system *mf){
+  int temp,emp=103,bit_s;
+  unsigned char first=0,second=0;
+  for(int j=0;j<count;j++){
+    first=0;
+    for(int i=1;i<=102;i++){
+      temp=indirect_bit_to_int(storage,i);
+      if(temp==0){
+        emp=i;
+        break;
+      }
+    }
+    temp=indirect_bit_to_int(storage,emp-1);
+    reset_data_block(temp,mf);
+    unmark_super(mf->sup_data,temp);
+    emp=emp-2;
+    bit_s=(emp*10)%8;
+    for(int i=0;i<bit_s;i++)
+      first+=pow(2,7-i);
+    storage[emp]=storage[emp]&first;
+    storage[emp+1]=storage[emp+1]&second;
+  }
+}
+int *list_empty_db(unsigned char *check,int size_c){
+	int *db_empty;
+	db_empty=(int *)malloc(size_c*sizeof(int));
+	for(int i=0;i<size_c;i++){
+		db_empty[i]=find_empty_block(check,128);
+		mark_super(check,db_empty[i]);
+	}
+	return db_empty;
+}
+int cal_block(int file_size){
+	int size_c;
+  if(file_size%128==0&&file_size!=0)
+    file_size-=1;
+	size_c=file_size/128+1;
+	if(size_c==1);
+	else if(size_c>=2&&size_c<=103) size_c+=1;
+	else if(size_c>=104&&size_c<=1012) size_c+=2+(size_c-2)/102;
+	return size_c;
+}
+tree *change_work_station(char (*name)[5],int num,tree *root,tree *now){
+  tree *temp;
+  if(strncmp(name[0],"/",1)==0){
+    if(num==1){
+      return root;
+    }
+    temp=root->children;
+    for(int i=1;i<num;i++){
+      if(i!=1)
+        temp=temp->children;
+      while(1){
+        if(strncmp("..",name[i],2)==0){
+          temp=temp->parents->parents;
+          break;
+        }
+        else if(strncmp(".",name[i],1)==0){
+          temp=temp->parents;
+          break;
+        }
+        else if(strncmp(temp->file_name,name[i],4)==0){
+          break;
+        }
+        else
+          temp=temp->siblings;
+      }
+    }
+    return temp;
+  }
+  else {
+    temp=now->children;
+    for(int i=0;i<num;i++){
+      if(i!=0)
+        temp=temp->children;
+      while(1){
+        if(strncmp("..",name[i],2)==0){
+          temp=temp->parents->parents;
+          break;
+        }
+        else if(strncmp(".",name[i],1)==0){
+          temp=temp->parents;
+          break;
+        }
+        else if(strncmp(temp->file_name,name[i],4)==0)
+          break;
+        else
+          temp=temp->siblings;
+      }
+    }
+    return temp;
+  }
+}
+void recursion_print(int deep,tree *work_station){
+  while(1){
+    for(int i=1;i<deep*3;i++)
+      printf("-");
+    printf("* %s\n",work_station->file_name);
+    if(work_station->children!=NULL)
+      recursion_print(deep+1,work_station->children);
+    if(work_station->siblings==NULL)
+      return;
+    work_station=work_station->siblings;
+  }
+}
+int count_empty_block(unsigned char *check,int length){
+  int count=0;
+  unsigned char bit_ch,bit_temp;
+  for(int i=0;i<length;i++){
+		for(int j=0;j<8;j++){
+			bit_ch=pow(2,7-j);
+			bit_temp=check[i]&bit_ch;
+			if(bit_temp==0){
+				count++;
+			}
+		}
+	}
+  return count;
+}
+void mymkdir(char *order,file_system *mf){
+  char course[1000]="",dname[5]="",temp[1000]="";
+  int fin,inum,data_list;
+  time_t now_time;
+  now_time=time(NULL);
+  sscanf(order,"%*s %s",course);
+  if(course[strlen(course)-1]=='/')
+   course[strlen(course)-1]=0;
+  if(course[0]=='/'){
+   int count=1,i=1;
+     while(1)
+     {
+        if(course[2]==0)
+        {
+           count--;
+           break;
+        }
+        if(course[i]=='/' && course[i+1]!=0)
+           count++;
+        else if(course[i]=='/'&&course[i+1]==0)
+           break;
+        if(course[i] == 0)
+           break;
+        i++;
+     }
+     if(count!=1){
+      for(int i=strlen(course)-1,j=0;;i--,j++){
+        if(course[i]=='/')
+          break;
+        else{
+          temp[j]=course[i];
+          course[i]=0;
+        }
+      }
+      for(int i=0;i<4;i++)
+        dname[i]=temp[strlen(temp)-1-i];
+      fin=find_route(course,mf);
+      }
+      else{
+         strncpy(dname,course+1,4);
+         fin=0;
+      }
+      if(fin==-1){
+        printf("오류 : 파일이 없습니다.\n");
+        return ;
+      }
+      else{
+        int *data_list,rn,temp;
+        data_list=list_data_block(fin,mf);
+        rn=count_data_block(fin,mf);
+        for(int i=0;i<rn;i++){
+          temp=find_file(mf->data[data_list[i]].dir,dname);
+          if(temp!=-1) {
+            printf("오류 : 파일이 이미 있습니다.\n");
+            return ;
+          }
+        }
+        free(data_list);
+      }
+      inum=find_empty_block(mf->sup_inode,64);
+      mark_super(mf->sup_inode,inum);
+      data_list=find_empty_block(mf->sup_data,128);
+      mark_super(mf->sup_data,data_list);
+      mf->inode[inum].type='d';
+      mf->inode[inum].c_time=*(localtime(&now_time));
+      mf->inode[inum].size=0;
+      mf->inode[inum].direct_block=data_list;
+      mf->inode[inum].indirect_block=-1;
+      mf->inode[inum].double_indirect_block=-1;
+      mf->data[data_list].dir.present=inum;
+      mf->data[data_list].dir.parent=fin;
+      mf->data[data_list].dir.famount=0;
+      write_fname_finode(mf,dname,inum,fin);
+  }
+  else{
+    int count=0;
+    if(course[strlen(course)-1]=='/')
+     course[strlen(course)-1]=0;
+    for(int i=0;i<=(int)strlen(course);i++){
+      if(course[i]=='/'||course[i]==0){
+        count++;
+      }
+    }
+    if(count!=1){
+     for(int i=strlen(course)-1,j=0;;i--,j++){
+       if(course[i]=='/')
+         break;
+       else{
+         temp[j]=course[i];
+         course[i]=0;
+       }
+     }
+     for(int i=0;i<4;i++)
+       dname[i]=temp[strlen(temp)-1-i];
+     fin=find_route(course,mf);
+    }
+    else {
+       strncpy(dname,course,4);
+       fin=now;
+    }
+    if(fin==-1){
+      printf("오류 : 파일이 없습니다.\n");
+      return ;
+    }
+    else{
+      int *data_list,rn,temp;
+      data_list=list_data_block(fin,mf);
+      rn=count_data_block(fin,mf);
+      for(int i=0;i<rn;i++){
+        temp=find_file(mf->data[data_list[i]].dir,dname);
+        if(temp!=-1) {
+          printf("오류 : 파일이 이미 있습니다.\n");
+          return ;
+        }
+      }
+      free(data_list);
+    }
+    inum=find_empty_block(mf->sup_inode,64);
+    mark_super(mf->sup_inode,inum);
+    data_list=find_empty_block(mf->sup_data,128);
+    mark_super(mf->sup_data,data_list);
+    mf->inode[inum].type='d';
+    mf->inode[inum].c_time=*(localtime(&now_time));
+    mf->inode[inum].size=0;
+    mf->inode[inum].direct_block=data_list;
+    mf->inode[inum].indirect_block=-1;
+    mf->inode[inum].double_indirect_block=-1;
+    mf->data[data_list].dir.present=inum;
+    mf->data[data_list].dir.parent=fin;
+    mf->data[data_list].dir.famount=0;
+    write_fname_finode(mf,dname,inum,fin);
+  }
+}
+void myshowfile(char *order,file_system *mf){
+  int num1,num2,*data_list,fin,size,n1b,n2b,n1r,n2r;
+  char course[1000];
+  sscanf(order,"%*s %d %d %s",&num1,&num2,course);
+  fin=find_route(course,mf);
+  if(fin==-1){
+      printf("오류 : 파일이 없습니다.\n");
+      return ;
+  }
+  size=mf->inode[fin].size;
+  if(num1>size||num2>size){
+    printf("오류 : 파일 크기 %d\n",size);
+    return;
+  }
+  data_list=list_data_block(fin,mf);
+  if(num1%128==0&&num1!=0)
+    n1b=num1/128-1;
+  else
+    n1b=num1/128;
+  if(num2%128==0&&num2!=0)
+    n2b=num2/128-1;
+  else
+    n2b=num2/128;
+  n1r=num1%128;
+  if(n1r==0&&num1!=0)
