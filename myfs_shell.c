@@ -350,3 +350,461 @@ void mycat(char *order,file_system *mf){
           mf->data[dnum3[i+rn]].reg.storage[j]=mf->data[dnum2[i]].reg.storage[j];
       }
       free(dnum3);
+    }
+    free(data_list);
+    free(dnum2);
+  }
+}
+void myshowinode(char *order,file_system *mf){
+int num;
+char ct_s[20];
+  sscanf(order,"%*s %d",&num);
+if(mf->inode[num-1].type=='d')
+    printf("file type : directory file\n");
+elseif(mf->inode[num-1].type==0){
+    printf("오류 : 비어있는 inode '%d'\n",num);
+return;
+  }
+elseif(mf->inode[num-1].type=='-')
+    printf("file type : regular file\n");
+  printf("file size : %d byte\n",mf->inode[num-1].size);
+  time_to_string(mf->inode[num-1].c_time,ct_s);
+  printf("modified time : %s\n",ct_s);
+  printf("data block list : %d, %d, %d\n",mf->inode[num-1].direct_block+1,mf->inode[num-1].indirect_block+1,mf->inode[num-1].double_indirect_block+1);
+}
+
+void reset_indirect(intnum,file_system *mf){
+structtm temp={0};
+mf->inode[num].type=0;
+mf->inode[num].c_time=temp;
+mf->inode[num].size=0;
+mf->inode[num].direct_block=0;
+mf->inode[num].indirect_block=0;
+mf->inode[num].double_indirect_block=0;
+}
+char *route_to_name(char *course){
+char dname[5]="",temp[1000]="",*name;
+if(course[0]=='/'){
+int count=1,i=1;
+while(1)
+     {
+if(course[2]==0)
+        {
+           count--;
+break;
+        }
+if(course[i]=='/'&&course[i+1]!=0)
+           count++;
+elseif(course[i]=='/'&&course[i+1]==0)
+break;
+if(course[i] == 0)
+break;
+        i++;
+     }
+if(count!=1){
+for(int i=strlen(course)-1,j=0;;i--,j++){
+if(course[i]=='/')
+break;
+else{
+          temp[j]=course[i];
+course[i]=0;
+        }
+      }
+for(int i=0;i<4;i++)
+        dname[i]=temp[strlen(temp)-1-i];
+      }
+else{
+         strncpy(dname,course+1,4);
+return (char *)1;
+      }
+  }
+else{
+int count=0;
+if(course[strlen(course)-1]=='/')
+course[strlen(course)-1]=0;
+for(int i=0;i<=(int)strlen(course);i++){
+if(course[i]=='/'||course[i]==0){
+        count++;
+      }
+    }
+if(count!=1){
+for(int i=strlen(course)-1,j=0;;i--,j++){
+if(course[i]=='/')
+break;
+else{
+         temp[j]=course[i];
+course[i]=0;
+       }
+     }
+for(int i=0;i<4;i++)
+       dname[i]=temp[strlen(temp)-1-i];
+    }
+else {
+       strncpy(dname,course,4);
+returnNULL;
+    }
+  }
+  name=(char *)calloc(strlen(dname)+1,sizeof(char));
+  strncpy(name,dname,strlen(dname)+1);
+return name;
+}
+int find_route(char *course,file_system *mf){
+char bck[1000],(*nlist)[5],*temp;
+int i=1,fin,rn,*data_list;
+  strcpy(bck,course);
+if(course[0] == '/'){
+int count=1;
+while(1)
+       {
+if(course[2]==0)
+          {
+             count--;
+break;
+          }
+if(course[i]=='/'&&course[i+1]!=0)
+             count++;
+elseif(course[i]=='/'&&course[i+1]==0)
+break;
+if(course[i] == 0)
+break;
+          i++;
+       }
+if(count==0)
+return 0;
+       nlist=(char (*)[5])calloc(count*5,sizeof(char));
+       temp=strtok(bck,"/");
+       nlist[0][0]=temp[0];
+       nlist[0][1]=temp[1];
+       nlist[0][2]=temp[2];
+       nlist[0][3]=temp[3];
+for(int i=1;i<count;i++){
+         temp=strtok(NULL,"/");
+         nlist[i][0]=temp[0];
+         nlist[i][1]=temp[1];
+         nlist[i][2]=temp[2];
+         nlist[i][3]=temp[3];
+       }
+       fin=0;
+       data_list=list_data_block(fin,mf);
+       rn=count_data_block(fin,mf);
+if(strncmp(nlist[0],"..",2)==0)
+         fin=mf->data[data_list[0]].dir.parent;
+elseif(strncmp(nlist[0],".",2)==0)
+         fin=mf->data[data_list[0]].dir.present;
+else{
+for(int i=0;i<rn;i++){
+         fin=find_file(mf->data[data_list[i]].dir,nlist[0]);
+if(fin!=-1) break;
+       }
+if(fin==-1){
+return -1;
+       }
+       free(data_list);
+     }
+for(int i=1;i<count;i++){
+         data_list=list_data_block(fin,mf);
+         rn=count_data_block(fin,mf);
+if(strncmp(nlist[i],"..",2)==0)
+           fin=mf->data[data_list[i]].dir.parent;
+elseif(strncmp(nlist[0],".",2)==0)
+           fin=mf->data[data_list[0]].dir.present;
+else{
+for(int j=0;j<rn;j++){
+           fin=find_file(mf->data[data_list[j]].dir,nlist[i]);
+if(fin!=-1) break;
+          }
+if(fin==-1){
+return -1;
+              }
+            free(data_list);
+          }
+        }
+     }
+else{
+int count=0;
+if(course[strlen(course)-1]=='/')
+course[strlen(course)-1]=0;
+for(int i=0;i<=(int)strlen(course);i++){
+if(course[i]=='/'||course[i]==0){
+          count++;
+        }
+      }
+      nlist=(char (*)[5])calloc(count*5,sizeof(char));
+      temp=strtok(bck,"/");
+      nlist[0][0]=temp[0];
+      nlist[0][1]=temp[1];
+      nlist[0][2]=temp[2];
+      nlist[0][3]=temp[3];
+for(int i=1;i<count;i++){
+        temp=strtok(NULL,"/");
+        nlist[i][0]=temp[0];
+        nlist[i][1]=temp[1];
+        nlist[i][2]=temp[2];
+        nlist[i][3]=temp[3];
+      }
+      fin=now;
+      data_list=list_data_block(fin,mf);
+      rn=count_data_block(fin,mf);
+if(strncmp(nlist[0],"..",2)==0)
+        fin=mf->data[data_list[0]].dir.parent;
+elseif(strncmp(nlist[0],".",2)==0)
+        fin=mf->data[data_list[0]].dir.present;
+else
+      {
+for(int i=0;i<rn;i++){
+          fin=find_file(mf->data[data_list[i]].dir,nlist[0]);
+if(fin!=-1) break;
+        }
+if(fin==-1){
+return -1;
+        }
+      }
+      free(data_list);
+for(int i=1;i<count;i++){
+        data_list=list_data_block(fin,mf);
+        rn=count_data_block(fin,mf);
+if(strncmp(nlist[i],"..",2)==0)
+          fin=mf->data[data_list[i]].dir.parent;
+elseif(strncmp(nlist[0],".",2)==0)
+          fin=mf->data[data_list[0]].dir.present;
+else
+        {
+for(int j=0;j<rn;j++){
+            fin=find_file(mf->data[data_list[j]].dir,nlist[i]);
+if(fin!=-1) break;
+            }
+if(fin==-1){
+return -1;
+            }
+            free(data_list);
+          }
+        }
+    }
+return fin;
+    free(nlist);
+}
+int *list_data_block(intnum,file_system *mf){
+int rn,*dstr,data_list;
+  rn=count_data_block(num,mf);
+  dstr=(int *)calloc(rn,sizeof(int));
+  dstr[0]=mf->inode[num].direct_block;
+  data_list=mf->inode[num].indirect_block;
+for(int i=1;i<rn;i++)
+    dstr[i]=indirect_bit_to_int(mf->data[data_list].reg.storage,i);
+return dstr;
+}
+int count_data_block(intnum,file_system *mf){
+int count=0,data_list;
+  data_list=mf->inode[num].direct_block;
+if(data_list!=-1)
+    count++;
+  data_list=mf->inode[num].indirect_block;
+if(data_list!=-1)
+    count+=cal_indirect_num(mf->data[data_list].reg.storage);
+return count;
+}
+void time_to_string(structtmct,char *ct_s){
+  sprintf(ct_s,"%04d/%02d/%02d %02d:%02d:%02d",ct.tm_year+1900,ct.tm_mon+1,ct.tm_mday,ct.tm_hour,ct.tm_min,ct.tm_sec);
+}
+void myshowblock(char *order,file_system *mf){
+int num;
+  sscanf(order,"%*s %d",&num);
+for(int i=0;i<128;i++)
+    printf("%c",mf->data[num-1].reg.storage[i]);
+}
+void mytouch(char *order,file_system *mf){
+time_t now_time;
+  now_time=time(NULL);
+int fin;
+char *name,course[1000]="";
+  sscanf(order,"%*s %s",course);
+  fin=find_route(course,mf);
+if(course[strlen(course)-1]=='/')
+    course[strlen(course)-1]=0;
+if(fin==-1){
+int i_empty,d_empty;
+    name=route_to_name(course);
+    fin=find_route(course,mf);
+if(name==NULL || name==(char *)1) ;
+elseif(fin==-1){printf("오류 : regular 파일입니다.\n");return;}
+    i_empty=find_empty_block(mf->sup_inode,64);
+    mark_super(mf->sup_inode,i_empty);
+mf->inode[i_empty].type='-';
+mf->inode[i_empty].c_time=*(localtime(&now_time));
+mf->inode[i_empty].size=0;
+    d_empty=find_empty_block(mf->sup_data,128);
+    mark_super(mf->sup_data,d_empty);
+mf->inode[i_empty].direct_block=d_empty;
+mf->inode[i_empty].indirect_block=-1;
+mf->inode[i_empty].double_indirect_block=-1;
+if(name==NULL)
+      write_fname_finode(mf,course,i_empty,now);
+elseif(name==(char *)1){
+      write_fname_finode(mf,course+1,i_empty,0);
+    }
+else {
+int ch;
+      ch=find_route(course,mf);
+      write_fname_finode(mf,name,i_empty,ch);
+      free(name);
+    }
+  }
+else{
+mf->inode[fin].c_time=*(localtime(&now_time));
+  }
+}
+void mymv(char *order,file_system *mf){
+char temp[1000]="",f1course[1000]="",f2course[1000]="",*name2,*name1;;
+int f1in,f2in,work_station,nwstation;
+time_t now_time;
+    now_time=time(NULL);
+    sscanf(order,"%*s %s %s",f1course,f2course);
+    f1in=find_route(f1course,mf);
+if(f1in==-1){
+      printf("오류 : 파일이없습니다.\n");
+return ;
+    }
+    name1=route_to_name(f1course);
+if(name1==NULL) {name1=f1course; nwstation=now;}
+elseif(name1==(char *)1) {name1=f1course+1; nwstation=0;}
+else {nwstation=find_route(f1course,mf);}
+    f2in=find_route(f2course,mf);
+if(f2in==-1){
+      name2=route_to_name(f2course);
+if(name2==NULL) {name2=f2course; work_station=now;}
+elseif(name2==(char *)1) {name2=f2course+1; work_station=0;}
+else {work_station=find_route(f2course,mf);}
+if(work_station==nwstation){
+        change_fname_finode(mf,name1,name2,work_station);
+      }
+else{
+        remove_fname_finode(mf,name1,nwstation);
+        write_fname_finode(mf,name2,f1in,work_station);
+      }
+mf->inode[f1in].c_time=*(localtime(&now_time));
+    }
+else {
+if(f1in==f2in){
+        printf("오류 : 같은파일입니다.\n");
+return ;
+      }
+if(mf->inode[f2in].type=='d'){
+if(f2in==nwstation){
+          printf("오류 : 같은파일입니다.\n");
+return ;
+        }
+else{
+int *fin_temp,rn_temp,fch;
+          fin_temp=list_data_block(f2in,mf);
+          rn_temp=count_data_block(f2in,mf);
+for(int i=0;i<rn_temp;i++){
+            fch=find_file(mf->data[fin_temp[i]].dir,name1);
+if(fch!=-1) break;
+          }
+if(fch!=-1){
+            sprintf(temp,"myrm %s/%s",f2course,name1);
+            myrm(temp,mf);
+          }
+          remove_fname_finode(mf,name1,nwstation);
+          write_fname_finode(mf,name1,f1in,f2in);
+          free(fin_temp);
+        }
+      }
+else {
+        sprintf(temp,"myrm %s",f2course);
+        myrm(temp,mf);
+        name2=route_to_name(f2course);
+if(name2==NULL) {name2=f2course; work_station=now;}
+elseif(name2==(char *)1) {name2=f2course+1; work_station=0;}
+else {work_station=find_route(f2course,mf);}
+if(work_station==nwstation){
+          change_fname_finode(mf,name1,name2,work_station);
+        }
+else{
+          remove_fname_finode(mf,name1,nwstation);
+          write_fname_finode(mf,name2,f1in,work_station);
+        }
+      }
+mf->inode[f1in].c_time=*(localtime(&now_time));
+    }
+}
+void myrmdir(char *order,file_system *mf){
+char course[1000]="",file_name[5]="",*name;
+int temp,rn,*data_list,work_station;
+  sscanf(order,"%*s %s",course);
+  temp=find_route(course,mf);
+if(temp==-1){
+    printf("오류 : 파일이없습니다.\n");
+return ;
+  }
+if(mf->inode[temp].type=='-'){
+    printf("오류 : regular 파일입니다.\n");
+return ;
+  }
+  data_list=list_data_block(temp,mf);
+  rn=count_data_block(temp,mf);
+if(mf->data[data_list[0]].dir.famount!=0){
+    printf("오류 : %s is not empty\n",course);
+return ;
+  }
+for(int i=0;i<rn;i++){
+    reset_data_block(data_list[i],mf);
+    unmark_super(mf->sup_data,data_list[i]);
+  }
+  reset_indirect(temp,mf);
+  unmark_super(mf->sup_inode,temp);
+  name=route_to_name(course);
+if(name==NULL) {name=course; work_station=now;}
+elseif(name==(char *)1) {name=course+1; work_station=0;}
+else  {work_station=find_route(course,mf);}
+  strncpy(file_name,name,4);
+  remove_fname_finode(mf,file_name,work_station);
+  free(data_list);
+}
+void myrm(char *order,file_system *mf){
+char course[1000]="",file_name[5]="",*name;
+int temp,rn,*data_list,work_station;
+  sscanf(order,"%*s %s",course);
+  temp=find_route(course,mf);
+if(temp==-1){
+    printf("오류 : 파일이없습니다.\n");
+return ;
+  }
+if(mf->inode[temp].type=='d'){
+    printf("오류 : directory 파일입니다.\n");
+return ;
+  }
+  data_list=list_data_block(temp,mf);
+  rn=count_data_block(temp,mf);
+for(int i=0;i<rn;i++){
+    reset_data_block(data_list[i],mf);
+    unmark_super(mf->sup_data,data_list[i]);
+  }
+if(rn>1){
+    reset_data_block(mf->inode[temp].indirect_block,mf);
+    unmark_super(mf->sup_data,mf->inode[temp].indirect_block);
+  }
+  reset_indirect(temp,mf);
+  unmark_super(mf->sup_inode,temp);
+  name=route_to_name(course);
+if(name==NULL) {name=course; work_station=now;}
+elseif(name==(char *)1) {name=course+1; work_station=0;}
+else  {work_station=find_route(course,mf);}
+  strncpy(file_name,name,4);
+  remove_fname_finode(mf,file_name,work_station);
+  free(data_list);
+}
+void reset_data_block(intnum,file_system *mf){
+for(int i=0;i<128;i++)
+mf->data[num].reg.storage[i]=0;
+}
+int sort_str(constvoid *v1,constvoid *v2){
+return strncmp(((ram_dfile *)(v1))->file_name,((ram_dfile *)(v2))->file_name,4);
+}
+void write_fname_finode(file_system *mf,char *myf_name,inti_empty,intfile_inode){
+int temp,data_list,fc,fdc,present=0,parent=0;
+  data_list=mf->inode[file_inode].direct_block;
+  fc=mf->data[data_list].dir.famount++;
+  present=mf->data[data_list].dir.present;
+
+
